@@ -14,3 +14,6 @@ venv/
 .idea/
 .vscode/
 .DS_Store
+
+# Exclude strunk-white-chat from this repo
+strunk-white-chat/

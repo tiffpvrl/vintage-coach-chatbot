@@ -1,0 +1,209 @@
+<!doctype html>
+<html lang="en">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Strunk &amp; White Style Checker</title>
+        <link rel="preconnect" href="https://fonts.googleapis.com" />
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+        <link
+            href="https://fonts.googleapis.com/css2?family=Playwrite+DE+Grund:wght@100..400&family=The+Girl+Next+Door&display=swap"
+            rel="stylesheet"
+        />
+        <style>
+            * {
+                box-sizing: border-box;
+                margin: 0;
+                padding: 0;
+            }
+            body {
+                font-family: "Georgia", "Times New Roman", serif;
+                height: 100vh;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 3rem 1rem;
+                background: #f9f6f1;
+            }
+            #container {
+                width: 100%;
+                max-width: 900px;
+                display: flex;
+                flex-direction: column;
+                border: 1px solid #e0d9cf;
+            }
+            #header {
+                padding: 1.5rem 2rem 0.75rem;
+                border-bottom: 1px solid #e0d9cf;
+            }
+            #header h1 {
+                font-size: 1.25rem;
+                font-weight: normal;
+                font-style: italic;
+                letter-spacing: 0.02em;
+            }
+            #header p {
+                font-size: 0.8rem;
+                color: #777;
+                margin-top: 0.25rem;
+            }
+            #messages {
+                overflow-y: auto;
+                padding: 2rem;
+                display: flex;
+                flex-direction: column;
+                gap: 1.5rem;
+                min-height: 450px;
+                max-height: 70vh;
+            }
+            .msg {
+                line-height: 1.6;
+                max-width: 80%;
+            }
+            .msg.user {
+                align-self: flex-end;
+                text-align: right;
+                font-family: "The Girl Next Door", cursive;
+            }
+            .msg.assistant {
+                font-family: "Playwrite DE Grund", cursive;
+                font-weight: 400;
+                font-size: 0.85rem;
+            }
+            .msg .role {
+                font-size: 0.7rem;
+                text-transform: uppercase;
+                letter-spacing: 0.08em;
+                color: #999;
+                margin-bottom: 0.25rem;
+                font-family: system-ui, sans-serif;
+            }
+            .msg .content {
+                white-space: pre-wrap;
+            }
+            .msg.loading .content {
+                color: #999;
+                font-style: italic;
+            }
+            #input-area {
+                display: flex;
+                gap: 1rem;
+                padding: 1.5rem;
+                border-top: 1px solid #e0d9cf;
+            }
+            #user-input {
+                flex: 1;
+                padding: 0.75rem 0;
+                border: none;
+                border-bottom: 1px solid #e0d9cf;
+                font-family: "The Girl Next Door", cursive;
+                font-size: 1rem;
+                outline: none;
+                background: transparent;
+            }
+            #user-input:focus {
+                border-bottom-color: #000;
+            }
+            button {
+                padding: 0.75rem 1.5rem;
+                background: #000;
+                color: #fff;
+                border: none;
+                font-family: system-ui, sans-serif;
+                font-size: 0.75rem;
+                text-transform: uppercase;
+                letter-spacing: 0.05em;
+                cursor: pointer;
+            }
+            button:disabled {
+                opacity: 0.3;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="container">
+            <div id="header">
+                <h1>The Elements of Style</h1>
+                <p>
+                    Paste your writing for a review in the style of Strunk &amp;
+                    White
+                </p>
+            </div>
+            <div id="messages"></div>
+            <div id="input-area">
+                <input
+                    type="text"
+                    id="user-input"
+                    placeholder="Paste your writing here..."
+                    autocomplete="off"
+                />
+                <button id="send-btn">Review</button>
+            </div>
+        </div>
+        <script>
+            const messages = document.getElementById("messages");
+            const userInput = document.getElementById("user-input");
+            const sendBtn = document.getElementById("send-btn");
+            let sessionId = null;
+
+            function addMessage(role, text, isLoading = false) {
+                const div = document.createElement("div");
+                div.className =
+                    "msg " +
+                    (role === "you" ? "user" : "assistant") +
+                    (isLoading ? " loading" : "");
+                div.innerHTML =
+                    '<div class="role">' +
+                    role +
+                    '</div><div class="content">' +
+                    text +
+                    "</div>";
+                messages.appendChild(div);
+                messages.scrollTop = messages.scrollHeight;
+                return div;
+            }
+
+            async function send() {
+                const text = userInput.value.trim();
+                if (!text) return;
+
+                userInput.value = "";
+                sendBtn.disabled = true;
+                addMessage("you", text);
+                const loading = addMessage(
+                    "Strunk & White",
+                    "Reviewing...",
+                    true,
+                );
+
+                try {
+                    const res = await fetch("/chat", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            message: text,
+                            session_id: sessionId,
+                        }),
+                    });
+                    const data = await res.json();
+                    sessionId = data.session_id;
+                    loading.querySelector(".content").textContent =
+                        data.response;
+                    loading.classList.remove("loading");
+                } catch (e) {
+                    loading.querySelector(".content").textContent =
+                        "Error: " + e.message;
+                    loading.classList.remove("loading");
+                }
+                sendBtn.disabled = false;
+                userInput.focus();
+            }
+
+            sendBtn.addEventListener("click", send);
+            userInput.addEventListener("keydown", function (e) {
+                if (e.key === "Enter") send();
+            });
+            userInput.focus();
+        </script>
+    </body>
+</html>

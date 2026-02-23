@@ -8,48 +8,44 @@ serial numbers and style numbers, era context and hardware, quality and damage i
 - **In scope:** Serial/style number interpretation, era and hardware identification, damage inspection, cleaning and conditioning, storage, and when to seek professional repair.
 - **Out of scope (redirected):** Market valuation and pricing, medical/health advice, and final authentication or counterfeit appraisal.
 
-## LLM backend (pick one)
+## LLM backend
 
-Backend order: **Vertex AI** → **Ollama** (first configured wins).
+Uses **LiteLLM** with **Vertex AI (Gemini)**. No API key needed — uses Application Default Credentials.
 
-| Backend | When to use | Config |
-|--------|----------------|--------|
-| **Ollama (local, open-source)** | Local dev **without any API key** | Install [Ollama](https://ollama.com), run a model (e.g. `ollama run llama3.2`). Optional: `OLLAMA_BASE_URL` (default `http://localhost:11434`), `OLLAMA_MODEL` (default `llama3.2`). |
-| **Vertex AI (Gemini)** | GCP (Cloud Run); no API key | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`; optional `VERTEX_AI_MODEL` (default `gemini-1.5-flash`) |
+| Config | Required |
+|--------|----------|
+| `GOOGLE_CLOUD_PROJECT` | Your GCP project ID |
+| `GOOGLE_CLOUD_LOCATION` | e.g. `us-central1` |
+| `VERTEX_AI_MODEL` | Optional; default `vertex_ai/gemini-2.0-flash-lite` |
 
-With no Vertex env vars set, the app uses **Ollama** by default (if Ollama is running). On Cloud Run, set Vertex env vars and use Vertex AI.
+## Run locally
 
-## Run locally (with Ollama — no API key)
-
-1. **Install [Ollama](https://ollama.com)** and pull a model:
+1. **Install [gcloud CLI](https://cloud.google.com/sdk/docs/install)** and authenticate:
    ```bash
-   ollama pull llama3.2
+   gcloud auth application-default login
    ```
-   (Other options: `mistral`, `llama3.1`, `gemma2:2b`.)
 
 2. **Install the app** with [uv](https://docs.astral.sh/uv/):
    ```bash
    uv sync
    ```
 
-3. **Start the app** (no env vars needed if Ollama is at `localhost:11434`):
+3. **Create a `.env` file** (copy from `.env.example`):
+   ```bash
+   cp .env.example .env
+   ```
+   Edit `.env` and set your GCP project ID and location:
+   ```
+   GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+   GOOGLE_CLOUD_LOCATION=us-central1
+   ```
+
+4. **Start the app**:
    ```bash
    uv run uvicorn main:app --reload
    ```
 
-4. Open **http://127.0.0.1:8000** and ask a question. The chatbot uses your local Ollama model.
-
-To force Ollama when you also have an API key set: `set LLM_BACKEND=ollama`. To use a different model: `set OLLAMA_MODEL=mistral`.
-
-## Run locally (Vertex AI from your machine)
-
-Install [gcloud CLI](https://cloud.google.com/sdk/docs/install), run:
-```bash
-gcloud auth application-default login
-set GOOGLE_CLOUD_PROJECT=your-gcp-project-id
-set GOOGLE_CLOUD_LOCATION=us-central1
-uv run uvicorn main:app --reload
-```
+5. Open **http://127.0.0.1:8000** and ask a question.
 
 ## Run evaluation
 
@@ -59,7 +55,7 @@ From the project root:
 uv run python eval/run_eval.py
 ```
 
-(See `eval/README.md` or the eval script for options. Requires Vertex AI env vars or a local Ollama model.)
+(See `eval/README.md` or the eval script for options. Requires Vertex AI env vars.)
 
 ## Live URL
 
@@ -67,13 +63,14 @@ uv run python eval/run_eval.py
 
 ## Repo layout
 
-- `main.py` — FastAPI app (GET `/`, POST `/chat`, GET `/health`)
-- `chatbot.py` — Chat logic (prompt + LLM + safety backstop)
+- `main.py` — FastAPI app (GET `/`, POST `/chat`, POST `/clear`, GET `/health`)
+- `chatbot.py` — Chat logic (LiteLLM + Vertex AI + safety backstop)
 - `prompt.py` — System prompt, few-shot examples, scope, escape hatch
 - `safety.py` — Post-generation safety backstop (distress / medical)
 - `static/index.html` — Simple web UI
 - `eval/` — Golden dataset and runnable eval script
 - `pyproject.toml` — uv-based project config
+- `.env.example` — Template for local env vars (copy to `.env`)
 - `Dockerfile` — For GCP (e.g. Cloud Run) deployment
 
 ## Deployment (GCP) with Vertex AI
@@ -92,6 +89,6 @@ uv run python eval/run_eval.py
    ```
    Replace `YOUR_PROJECT_ID` with your GCP project ID. The running container uses Application Default Credentials, so the service account above is used for Vertex AI calls.
 
-4. Optional: set `VERTEX_AI_MODEL` (e.g. `gemini-1.5-pro`) if you want a different model than `gemini-1.5-flash`.
+4. Optional: set `VERTEX_AI_MODEL` (e.g. `vertex_ai/gemini-1.5-pro`) if you want a different model than `vertex_ai/gemini-2.0-flash-lite`.
 
 5. Put the live URL in this README and in your submission.

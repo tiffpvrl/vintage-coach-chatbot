@@ -73,6 +73,10 @@
       cursor: pointer;
     }
     button:hover { background: #6b5b4a; }
+    #clear {
+      background: #8b7355;
+    }
+    #clear:hover { background: #6b5b4a; }
     button:disabled {
       background: #a89f8e;
       cursor: not-allowed;
@@ -105,6 +109,7 @@
       required
     />
     <button type="submit" id="submit">Ask</button>
+    <button type="button" id="clear">Clear</button>
   </form>
 
   <p id="status" class="status" aria-live="polite"></p>
@@ -117,6 +122,9 @@
     const statusEl = document.getElementById("status");
     const errorEl = document.getElementById("error");
     const submitBtn = document.getElementById("submit");
+    const clearBtn = document.getElementById("clear");
+
+    let sessionId = null;
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
@@ -130,10 +138,13 @@
       submitBtn.disabled = true;
 
       try {
+        const body = { message: text };
+        if (sessionId) body.session_id = sessionId;
+
         const res = await fetch("/chat", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: text }),
+          body: JSON.stringify(body),
         });
         const data = await res.json().catch(() => ({}));
 
@@ -141,6 +152,7 @@
           throw new Error(data.detail || res.statusText || "Request failed");
         }
 
+        sessionId = data.session_id;
         output.textContent = data.response || "";
         if (data.safety_triggered) {
           output.classList.add("safety");
@@ -154,6 +166,24 @@
       } finally {
         submitBtn.disabled = false;
         messageInput.focus();
+      }
+    });
+
+    clearBtn.addEventListener("click", async () => {
+      if (!sessionId) {
+        output.classList.add("empty");
+        output.textContent = "Ask a question above. I can help with serial/style numbers, authenticity markers, condition, and care.";
+        statusEl.textContent = "";
+        return;
+      }
+      try {
+        await fetch("/clear?session_id=" + encodeURIComponent(sessionId), { method: "POST" });
+        sessionId = null;
+        output.classList.add("empty");
+        output.textContent = "Ask a question above. I can help with serial/style numbers, authenticity markers, condition, and care.";
+        statusEl.textContent = "Session cleared.";
+      } catch (err) {
+        statusEl.textContent = "Could not clear session.";
       }
     });
   </script>

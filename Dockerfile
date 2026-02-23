@@ -1,5 +1,5 @@
 # Vintage Coach Chatbot — image for GCP Cloud Run
-FROM python:3.11-slim
+FROM python:3.12-slim-bookworm
 
 WORKDIR /app
 
@@ -7,7 +7,7 @@ WORKDIR /app
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 
 # Project files
-COPY pyproject.toml ./
+COPY pyproject.toml README.md ./
 COPY main.py chatbot.py prompt.py safety.py ./
 COPY static/ ./static/
 

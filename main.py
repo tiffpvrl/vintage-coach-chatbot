@@ -5,11 +5,17 @@ Serves the web UI and a POST /chat endpoint.
 
 from pathlib import Path
 
+import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from chatbot import generate_answer
+
+_BACKEND_UNAVAILABLE_MSG = (
+    "Chat backend not configured. For local use, run Ollama (ollama run llama3.2). "
+    "For GCP, set GOOGLE_CLOUD_PROJECT and GOOGLE_CLOUD_LOCATION."
+)
 
 app = FastAPI(
     title="Vintage Coach Chatbot",

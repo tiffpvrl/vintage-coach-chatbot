@@ -47,6 +47,8 @@ Uses **LiteLLM** with **Vertex AI (Gemini)**. No API key needed — uses Applica
 
 5. Open **http://127.0.0.1:8000** and ask a question.
 
+   > **Windows:** If you get `WinError 10013` (socket access forbidden), another program may be using port 8000. Either terminate that process (e.g. `netstat -ano | findstr :8000` to find the PID, then `taskkill /PID <pid> /F`) or use a different port: `uv run uvicorn main:app --reload --port 8080`.
+
 ## Run evaluation
 
 From the project root:

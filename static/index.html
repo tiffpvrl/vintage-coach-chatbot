@@ -150,6 +150,56 @@
       color: #6b5b4a;
       margin-top: 0.25rem;
     }
+    .image-upload {
+      margin-top: 0.5rem;
+    }
+    .image-upload input[type="file"] {
+      font-size: 0.85rem;
+      color: #6b5b4a;
+    }
+    .image-preview {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+    }
+    .image-preview-item {
+      position: relative;
+      width: 80px;
+      height: 80px;
+    }
+    .image-preview-item img {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      border-radius: 6px;
+      border: 1px solid #d4c9b8;
+    }
+    .image-preview-item .remove-img {
+      position: absolute;
+      top: 2px;
+      right: 2px;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      font-size: 0.75rem;
+      line-height: 1;
+      background: rgba(0,0,0,0.6);
+      color: #fff;
+      border: none;
+      border-radius: 50%;
+      cursor: pointer;
+    }
+    .image-preview-item .remove-img:hover {
+      background: rgba(0,0,0,0.8);
+    }
+    .chat-pane .message-content img.msg-img {
+      max-width: 120px;
+      max-height: 120px;
+      border-radius: 6px;
+      margin-top: 0.25rem;
+      border: 1px solid #e0d6c8;
+    }
   </style>
 </head>
 <body>
@@ -169,6 +219,10 @@
           autocomplete="off"
           required
         ></textarea>
+        <div class="image-upload">
+          <input type="file" id="imageInput" accept="image/jpeg,image/png,image/webp" multiple aria-label="Attach images">
+          <div id="imagePreview" class="image-preview"></div>
+        </div>
       </div>
       <button type="submit" id="submit">Ask</button>
       <button type="button" id="clear">Clear</button>
@@ -183,6 +237,8 @@
   <script>
     const form = document.getElementById("form");
     const messageInput = document.getElementById("message");
+    const imageInput = document.getElementById("imageInput");
+    const imagePreview = document.getElementById("imagePreview");
     const chatPane = document.getElementById("chatPane");
     const statusEl = document.getElementById("status");
     const errorEl = document.getElementById("error");
@@ -190,13 +246,55 @@
     const clearBtn = document.getElementById("clear");
 
     const EMPTY_TEXT = "Ask a question below. I can help with serial/style numbers, authenticity markers, condition, and care.";
+    const MAX_IMAGES = 5;
+    const MAX_IMAGE_SIZE = 4 * 1024 * 1024;  // 4MB per image
 
     let sessionId = null;
+    let pendingImages = [];  // [{ dataUrl, file }]
 
     function resizeTextarea() {
       messageInput.style.height = "auto";
       messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + "px";
     }
+
+    function renderImagePreview() {
+      imagePreview.innerHTML = "";
+      for (let i = 0; i < pendingImages.length; i++) {
+        const item = document.createElement("div");
+        item.className = "image-preview-item";
+        const img = document.createElement("img");
+        img.src = pendingImages[i].dataUrl;
+        img.alt = "Preview";
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "remove-img";
+        btn.textContent = "×";
+        btn.setAttribute("aria-label", "Remove image");
+        btn.addEventListener("click", () => {
+          pendingImages.splice(i, 1);
+          renderImagePreview();
+        });
+        item.appendChild(img);
+        item.appendChild(btn);
+        imagePreview.appendChild(item);
+      }
+    }
+
+    imageInput.addEventListener("change", () => {
+      const files = Array.from(imageInput.files || []);
+      for (const file of files) {
+        if (pendingImages.length >= MAX_IMAGES) break;
+        if (!file.type.startsWith("image/")) continue;
+        if (file.size > MAX_IMAGE_SIZE) continue;
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          pendingImages.push({ dataUrl: e.target.result, file });
+          renderImagePreview();
+        };
+        reader.readAsDataURL(file);
+      }
+      imageInput.value = "";
+    });
 
     messageInput.addEventListener("input", resizeTextarea);
     messageInput.addEventListener("keydown", (e) => {
@@ -221,7 +319,7 @@
       }
     }
 
-    function appendMessage(role, content, isSafety) {
+    function appendMessage(role, content, isSafety, imageUrls) {
       chatPane.classList.remove("empty");
       const msgDiv = document.createElement("div");
       msgDiv.className = "message " + role;
@@ -236,6 +334,15 @@
         text.innerHTML = renderMarkdown(content);
       } else {
         text.textContent = content;
+        if (imageUrls && imageUrls.length > 0) {
+          for (const url of imageUrls) {
+            const img = document.createElement("img");
+            img.src = url;
+            img.alt = "Attached";
+            img.className = "msg-img";
+            text.appendChild(img);
+          }
+        }
       }
       msgDiv.appendChild(text);
       chatPane.appendChild(msgDiv);
@@ -252,11 +359,15 @@
       const text = messageInput.value.trim();
       if (!text) return;
 
+      const imageDataUrls = pendingImages.map(p => p.dataUrl);
+      pendingImages = [];
+      renderImagePreview();
+
       chatPane.classList.remove("empty");
       if (chatPane.classList.contains("empty") || chatPane.textContent === EMPTY_TEXT) {
         chatPane.innerHTML = "";
       }
-      appendMessage("user", text);
+      appendMessage("user", text, false, imageDataUrls);
 
       const placeholder = document.createElement("div");
       placeholder.className = "message assistant";
@@ -273,6 +384,7 @@
       try {
         const body = { message: text };
         if (sessionId) body.session_id = sessionId;
+        if (imageDataUrls.length > 0) body.images = imageDataUrls;
 
         const res = await fetch("/chat", {
           method: "POST",
@@ -288,12 +400,12 @@
         }
 
         sessionId = data.session_id;
-        appendMessage("assistant", data.response || "", data.safety_triggered);
+        appendMessage("assistant", data.response || "", data.safety_triggered, null);
         if (data.safety_triggered) {
           statusEl.textContent = "A safety message was shown for this question.";
         }
       } catch (err) {
-        appendMessage("assistant", "Something went wrong.", false);
+        appendMessage("assistant", "Something went wrong.", false, null);
         errorEl.textContent = err.message;
         errorEl.hidden = false;
       } finally {

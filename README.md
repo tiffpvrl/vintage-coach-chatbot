@@ -16,7 +16,7 @@ Uses **LiteLLM** with **Vertex AI (Gemini)**. No API key needed — uses Applica
 |--------|----------|
 | `GOOGLE_CLOUD_PROJECT` | Your GCP project ID |
 | `GOOGLE_CLOUD_LOCATION` | e.g. `us-central1` |
-| `VERTEX_AI_MODEL` | Optional; default `vertex_ai/gemini-2.0-flash-lite` |
+| `VERTEX_AI_MODEL` | Optional; default `vertex_ai/gemini-2.5-flash-lite` |
 
 ## Run locally
 
@@ -91,6 +91,6 @@ uv run python eval/run_eval.py
    ```
    Replace `YOUR_PROJECT_ID` with your GCP project ID. The running container uses Application Default Credentials, so the service account above is used for Vertex AI calls.
 
-4. Optional: set `VERTEX_AI_MODEL` (e.g. `vertex_ai/gemini-1.5-pro`) if you want a different model than `vertex_ai/gemini-2.0-flash-lite`.
+4. Optional: set `VERTEX_AI_MODEL` (e.g. `vertex_ai/gemini-1.5-pro`) if you want a different model than `vertex_ai/gemini-2.5-flash-lite`.
 
 5. Put the live URL in this README and in your submission.

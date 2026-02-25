@@ -14,7 +14,7 @@ from litellm import completion
 from prompt import get_few_shot_examples, get_system_prompt
 from safety import SafetyResult, apply_safety_backstop
 
-MODEL = os.getenv("VERTEX_AI_MODEL", "vertex_ai/gemini-2.0-flash-lite")
+MODEL = os.getenv("VERTEX_AI_MODEL", "vertex_ai/gemini-2.5-flash-lite")
 
 
 def build_initial_messages() -> List[Dict[str, str]]:

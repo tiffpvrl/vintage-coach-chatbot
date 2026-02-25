@@ -24,43 +24,88 @@
     .subtitle {
       font-size: 0.9rem;
       color: #6b5b4a;
-      margin-bottom: 1.5rem;
+      margin-bottom: 1rem;
     }
-    .chat-box {
+    .chat-pane {
       background: #fff;
       border: 1px solid #e0d6c8;
       border-radius: 8px;
       padding: 1rem;
       min-height: 200px;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-bottom: 1rem;
+    }
+    .chat-pane.empty {
+      color: #8a7f6f;
+      font-style: italic;
+      display: flex;
+      align-items: center;
+    }
+    .chat-pane .message {
       margin-bottom: 1rem;
       white-space: pre-wrap;
       word-wrap: break-word;
     }
-    .chat-box.empty {
-      color: #8a7f6f;
-      font-style: italic;
+    .chat-pane .message:last-child {
+      margin-bottom: 0;
     }
-    .chat-box.safety {
+    .chat-pane .message.user {
+      margin-left: 2rem;
+      padding: 0.5rem 0.75rem;
+      background: #f0ebe3;
+      border-radius: 8px;
+      border-bottom-right-radius: 2px;
+    }
+    .chat-pane .message.assistant {
+      margin-right: 2rem;
+      padding: 0.5rem 0.75rem;
+      background: #f8f4ef;
+      border: 1px solid #e0d6c8;
+      border-radius: 8px;
+      border-bottom-left-radius: 2px;
+    }
+    .chat-pane .message.assistant.safety {
       border-left: 4px solid #c45c3e;
       background: #fef8f6;
     }
-    form {
+    .chat-pane .message-label {
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: #6b5b4a;
+      margin-bottom: 0.25rem;
+    }
+    .form-row {
       display: flex;
       gap: 0.5rem;
+      align-items: flex-end;
       margin-bottom: 0.5rem;
     }
-    input[type="text"] {
+    .query-wrap {
       flex: 1;
+      display: flex;
+      flex-direction: column;
+      min-width: 0;
+    }
+    textarea#message {
+      width: 100%;
+      min-height: 44px;
+      max-height: 200px;
       padding: 0.6rem 0.75rem;
       border: 1px solid #d4c9b8;
       border-radius: 6px;
       font: inherit;
       font-size: 0.95rem;
+      resize: none;
+      overflow-y: auto;
     }
-    input[type="text"]:focus {
+    textarea#message:focus {
       outline: none;
       border-color: #8b7355;
       box-shadow: 0 0 0 2px rgba(139, 115, 85, 0.2);
+    }
+    .form-row button {
+      flex-shrink: 0;
     }
     button {
       padding: 0.6rem 1rem;
@@ -97,19 +142,23 @@
   <h1>Vintage Coach Bag Q&A</h1>
   <p class="subtitle">Ask about serial numbers, era, hardware, damage inspection, or care for vintage Coach bags (pre-2000).</p>
 
-  <div id="output" class="chat-box empty" aria-live="polite">Ask a question above. I can help with serial/style numbers, authenticity markers, condition, and care.</div>
+  <div id="chatPane" class="chat-pane empty" aria-live="polite">Ask a question below. I can help with serial/style numbers, authenticity markers, condition, and care.</div>
 
   <form id="form" action="#" method="post">
-    <input
-      type="text"
-      name="message"
-      id="message"
-      placeholder="e.g. What does F5D-9966 mean on my Coach bag?"
-      autocomplete="off"
-      required
-    />
-    <button type="submit" id="submit">Ask</button>
-    <button type="button" id="clear">Clear</button>
+    <div class="form-row">
+      <div class="query-wrap">
+        <textarea
+          name="message"
+          id="message"
+          placeholder="e.g. What does F5D-9966 mean on my Coach bag?"
+          rows="1"
+          autocomplete="off"
+          required
+        ></textarea>
+      </div>
+      <button type="submit" id="submit">Ask</button>
+      <button type="button" id="clear">Clear</button>
+    </div>
   </form>
 
   <p id="status" class="status" aria-live="polite"></p>
@@ -118,24 +167,72 @@
   <script>
     const form = document.getElementById("form");
     const messageInput = document.getElementById("message");
-    const output = document.getElementById("output");
+    const chatPane = document.getElementById("chatPane");
     const statusEl = document.getElementById("status");
     const errorEl = document.getElementById("error");
     const submitBtn = document.getElementById("submit");
     const clearBtn = document.getElementById("clear");
 
+    const EMPTY_TEXT = "Ask a question below. I can help with serial/style numbers, authenticity markers, condition, and care.";
+
     let sessionId = null;
+
+    function resizeTextarea() {
+      messageInput.style.height = "auto";
+      messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + "px";
+    }
+
+    messageInput.addEventListener("input", resizeTextarea);
+    messageInput.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        form.dispatchEvent(new Event("submit"));
+      }
+    });
+
+    function appendMessage(role, content, isSafety) {
+      chatPane.classList.remove("empty");
+      const msgDiv = document.createElement("div");
+      msgDiv.className = "message " + role;
+      if (role === "assistant" && isSafety) msgDiv.classList.add("safety");
+      const label = document.createElement("div");
+      label.className = "message-label";
+      label.textContent = role === "user" ? "You" : "Assistant";
+      msgDiv.appendChild(label);
+      const text = document.createElement("div");
+      text.textContent = content;
+      msgDiv.appendChild(text);
+      chatPane.appendChild(msgDiv);
+      chatPane.scrollTop = chatPane.scrollHeight;
+    }
+
+    function setEmptyState() {
+      chatPane.classList.add("empty");
+      chatPane.innerHTML = EMPTY_TEXT;
+    }
 
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const text = messageInput.value.trim();
       if (!text) return;
 
-      output.classList.remove("empty", "safety");
-      output.textContent = "…";
+      chatPane.classList.remove("empty");
+      if (chatPane.classList.contains("empty") || chatPane.textContent === EMPTY_TEXT) {
+        chatPane.innerHTML = "";
+      }
+      appendMessage("user", text);
+
+      const placeholder = document.createElement("div");
+      placeholder.className = "message assistant";
+      placeholder.innerHTML = '<div class="message-label">Assistant</div><div>…</div>';
+      chatPane.appendChild(placeholder);
+      chatPane.scrollTop = chatPane.scrollHeight;
+
       statusEl.textContent = "";
       errorEl.hidden = true;
       submitBtn.disabled = true;
+      messageInput.value = "";
+      resizeTextarea();
 
       try {
         const body = { message: text };
@@ -148,19 +245,19 @@
         });
         const data = await res.json().catch(() => ({}));
 
+        placeholder.remove();
+
         if (!res.ok) {
           throw new Error(data.detail || res.statusText || "Request failed");
         }
 
         sessionId = data.session_id;
-        output.textContent = data.response || "";
+        appendMessage("assistant", data.response || "", data.safety_triggered);
         if (data.safety_triggered) {
-          output.classList.add("safety");
           statusEl.textContent = "A safety message was shown for this question.";
         }
       } catch (err) {
-        output.classList.add("empty");
-        output.textContent = "Something went wrong.";
+        appendMessage("assistant", "Something went wrong.", false);
         errorEl.textContent = err.message;
         errorEl.hidden = false;
       } finally {
@@ -171,16 +268,14 @@
 
     clearBtn.addEventListener("click", async () => {
       if (!sessionId) {
-        output.classList.add("empty");
-        output.textContent = "Ask a question above. I can help with serial/style numbers, authenticity markers, condition, and care.";
+        setEmptyState();
         statusEl.textContent = "";
         return;
       }
       try {
         await fetch("/clear?session_id=" + encodeURIComponent(sessionId), { method: "POST" });
         sessionId = null;
-        output.classList.add("empty");
-        output.textContent = "Ask a question above. I can help with serial/style numbers, authenticity markers, condition, and care.";
+        setEmptyState();
         statusEl.textContent = "Session cleared.";
       } catch (err) {
         statusEl.textContent = "Could not clear session.";

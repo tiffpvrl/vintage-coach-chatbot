@@ -94,3 +94,104 @@ uv run python eval/run_eval.py
 4. Optional: set `VERTEX_AI_MODEL` (e.g. `vertex_ai/gemini-1.5-pro`) if you want a different model than `vertex_ai/gemini-2.0-flash-lite`.
 
 5. Put the live URL in this README and in your submission.
+
+---
+
+## Technical design & components
+
+This section describes the architecture, data flow, and implementation details of the Vintage Coach chatbot.
+
+### Architecture overview
+
+The system follows a layered design:
+
+```
+┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
+│  Static HTML    │────▶│  FastAPI        │────▶│  LiteLLM        │
+│  (index.html)   │     │  (main.py)      │     │  + Vertex AI    │
+│                 │     │                 │     │  (chatbot.py)   │
+│  Client-side    │     │  Session store  │     │                 │
+│  JS fetch      │     │  Multimodal     │     │  prompt.py      │
+│  /chat POST    │     │  validation     │     │  safety.py      │
+└─────────────────┘     └─────────────────┘     └─────────────────┘
+```
+
+- **Frontend:** Single-page HTML with vanilla JS; no build step. Uses fetch for POST `/chat`, maintains `session_id` for multi-turn.
+- **Backend:** FastAPI app with in-memory session storage. Each request is validated, then routed to the chatbot module.
+- **LLM layer:** LiteLLM abstracts Vertex AI (Gemini). Uses Application Default Credentials; no API keys.
+
+### Request flow
+
+1. User submits text (and optionally images) via the form.
+2. **main.py** receives `ChatRequest`; validates `message` (1–4000 chars) and `images` (max 5, base64 data URLs, ~6MB each).
+3. Session is created or resumed: `sessions[session_id]` holds a list of messages in OpenAI format.
+4. User message is built as text-only or multimodal (text + `image_url` parts).
+5. **chatbot.py** calls `generate_answer_from_messages()`: sends full history to LiteLLM, receives raw response.
+6. **safety.py** runs `apply_safety_backstop()` on user + generation; may replace output with fallback.
+7. Response is returned; assistant message is appended to session; `ChatResponse` sent to client.
+
+### Component breakdown
+
+| Component | Purpose |
+|-----------|---------|
+| **main.py** | FastAPI app; routes (`/`, `/chat`, `/clear`, `/health`); session storage; request/response models; image validation and multimodal message construction. |
+| **chatbot.py** | Builds initial messages (system + few-shot), calls LiteLLM `completion()`, passes to safety backstop. Handles multimodal content extraction for safety context. |
+| **prompt.py** | System prompt assembly: role persona, hard-coded rules (serial numbers, era, hardware, damage, care), in-scope/out-of-scope instructions, escape hatch, and 6 few-shot examples. |
+| **safety.py** | Post-generation backstop: keyword + regex checks for distress/crisis and medical-emergency content; returns fallback responses when triggered. |
+| **static/index.html** | Chat UI: query box with + button, image paste, inline preview; chat pane with images-first layout; Markdown rendering (marked + DOMPurify). |
+
+### Message format & session management
+
+Each session stores messages in OpenAI chat-completions format:
+
+```python
+[
+  {"role": "system", "content": "<full system prompt>"},
+  {"role": "user", "content": "<few-shot user>"},
+  {"role": "assistant", "content": "<few-shot assistant>"},
+  # ... more few-shot pairs ...
+  {"role": "user", "content": "..."},  # or multimodal list
+  {"role": "assistant", "content": "..."},
+]
+```
+
+- **Multimodal user messages:** When images are present, `content` is a list: `[{"type": "text", "text": "..."}, {"type": "image_url", "image_url": {"url": "data:image/..."}}]`.
+- **Session lifecycle:** Created on first `/chat` with `session_id`; cleared via POST `/clear`. Sessions are in-memory; no persistence (Cloud Run instances are stateless).
+
+### Multimodal support
+
+- **Frontend:** Images added via file picker (+ button) or paste (Ctrl+V). Converted to base64 data URLs; max 5 images, 4MB each.
+- **Backend:** Validates `data:image/...` URLs; max ~6MB each (base64 overhead). Passes to LiteLLM in `image_url` format; Gemini supports vision natively.
+- **Safety:** `_extract_text_from_content()` pulls text from multimodal content so the user message can be checked for distress/medical keywords.
+
+### Safety backstop
+
+`safety.py` implements a two-stage check:
+
+1. **Distress/crisis:** Keywords (e.g. suicide, self-harm, 988) and regex patterns. If detected in user or generation → returns crisis-resources fallback (988, Crisis Text Line).
+2. **Medical emergency:** Keywords (e.g. chest pain, stroke, call 911) and regex patterns. If detected → returns medical-emergency fallback (911, ER, doctor).
+
+`SafetyResult` includes `response`, `triggered`, `source` (user/generation), and `trigger_type`. The frontend shows a visual indicator when `safety_triggered` is true.
+
+### Prompt engineering
+
+Prompt structure in `prompt.py`:
+
+1. **Role persona:** Vintage Coach expert; audience: owners and shoppers.
+2. **Rules:** Hard-coded facts from PDF (serial/style numbers, era, hardware, damage inspection, care).
+3. **In-scope:** Four areas: serial/style, era, damage inspection, care.
+4. **Out-of-scope:** Redirects for market valuation, medical, final authentication; with canned phrases.
+5. **Escape hatch:** Four uncertainty patterns (missing info, needs visual, unclear question, no evidence).
+6. **Few-shot:** Six user/assistant pairs covering in-scope, out-of-scope, and edge cases.
+
+### Frontend design
+
+- **Query box:** Single textarea with + button (top-left); tooltip "Add images"; images preview inline above text.
+- **Chat pane:** User messages show images first, then text below; assistant messages render Markdown (marked + DOMPurify).
+- **State:** `sessionId`, `pendingImages`; no localStorage (session persistence was removed for Cloud Run compatibility).
+
+### Deployment architecture
+
+- **Dockerfile:** Python 3.12 slim; uv for package install; copies source; exposes 8080; runs `uvicorn main:app`.
+- **Cloud Run:** Stateless; no session persistence across instances. Health check at `/health`.
+- **Credential flow:** Application Default Credentials; Cloud Run service account needs `roles/aiplatform.user` for Vertex AI.

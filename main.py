@@ -29,6 +29,7 @@ sessions: dict[str, list[dict]] = {}
 class ChatRequest(BaseModel):
     message: str = Field(..., min_length=1, max_length=4000)
     session_id: str | None = None
+    images: list[str] | None = None  # base64 data URLs (data:image/...;base64,...)
 
 
 class ChatResponse(BaseModel):
@@ -53,7 +54,23 @@ def chat(body: ChatRequest):
     if session_id not in sessions:
         sessions[session_id] = build_initial_messages()
 
-    sessions[session_id].append({"role": "user", "content": body.message})
+    # Build user message: text only, or multimodal (text + images)
+    # Validate images: max 5, each data URL reasonable size (~6MB base64 for ~4MB image)
+    MAX_IMAGE_B64 = 6 * 1024 * 1024
+    valid_images = [
+        img for img in (body.images or [])[:5]
+        if img and img.startswith("data:image/") and len(img) < MAX_IMAGE_B64
+    ]
+    if valid_images:
+        content: list[dict] = [{"type": "text", "text": body.message}]
+        for img in valid_images:
+            if img and img.startswith("data:image/"):
+                content.append({"type": "image_url", "image_url": {"url": img}})
+        user_msg = {"role": "user", "content": content}
+    else:
+        user_msg = {"role": "user", "content": body.message}
+
+    sessions[session_id].append(user_msg)
     try:
         result = generate_answer_from_messages(sessions[session_id], user_message=body.message)
         sessions[session_id].append({"role": "assistant", "content": result.response})

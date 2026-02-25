@@ -35,7 +35,7 @@ def _build_messages(user_message: str) -> List[Dict[str, str]]:
     return messages
 
 
-def _generate_response(messages: List[Dict[str, str]], *, model: str | None = None) -> str:
+def _generate_response(messages: List[Dict], *, model: str | None = None) -> str:
     """Generate a response using LiteLLM with Vertex AI."""
     project = os.getenv("GOOGLE_CLOUD_PROJECT") or os.getenv("VERTEX_AI_PROJECT") or os.getenv("VERTEXAI_PROJECT")
     location = os.getenv("GOOGLE_CLOUD_LOCATION") or os.getenv("VERTEX_AI_LOCATION") or os.getenv("VERTEXAI_LOCATION")
@@ -66,21 +66,34 @@ def generate_answer(user_message: str, *, model: str | None = None) -> SafetyRes
     return generate_answer_from_messages(messages, user_message=user_message, model=model)
 
 
+def _extract_text_from_content(content: str | list) -> str:
+    """Extract text from message content (string or multimodal list)."""
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts = []
+        for p in content:
+            if isinstance(p, dict) and p.get("type") == "text":
+                parts.append(p.get("text", ""))
+        return " ".join(parts)
+    return ""
+
+
 def generate_answer_from_messages(
-    messages: List[Dict[str, str]],
+    messages: List[Dict],
     *,
     user_message: str | None = None,
     model: str | None = None,
 ) -> SafetyResult:
     """Generate an answer from full message history and run it through the safety backstop.
 
-    user_message: The last user message (for safety backstop context). If None, derived from messages.
+    user_message: The last user message text (for safety backstop context). If None, derived from messages.
     """
     raw = _generate_response(messages, model=model)
     last_user = user_message
     if last_user is None and messages:
         for m in reversed(messages):
             if m.get("role") == "user":
-                last_user = m.get("content", "")
+                last_user = _extract_text_from_content(m.get("content", ""))
                 break
     return apply_safety_backstop(raw, user_message=last_user or "")

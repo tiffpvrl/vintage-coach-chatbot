@@ -75,6 +75,20 @@
       color: #6b5b4a;
       margin-bottom: 0.25rem;
     }
+    .chat-pane .message-content {
+      word-wrap: break-word;
+    }
+    .chat-pane .message.assistant .message-content {
+      white-space: normal;
+    }
+    .chat-pane .message-content p { margin: 0.5em 0; }
+    .chat-pane .message-content p:first-child { margin-top: 0; }
+    .chat-pane .message-content p:last-child { margin-bottom: 0; }
+    .chat-pane .message-content ul, .chat-pane .message-content ol {
+      margin: 0.5em 0;
+      padding-left: 1.5em;
+    }
+    .chat-pane .message-content li { margin: 0.25em 0; }
     .form-row {
       display: flex;
       gap: 0.5rem;
@@ -164,6 +178,8 @@
   <p id="status" class="status" aria-live="polite"></p>
   <p id="error" class="error" aria-live="assertive" hidden></p>
 
+  <script src="https://cdn.jsdelivr.net/npm/marked@9.1.6/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3/dist/purify.min.js"></script>
   <script>
     const form = document.getElementById("form");
     const messageInput = document.getElementById("message");
@@ -190,6 +206,21 @@
       }
     });
 
+    function renderMarkdown(text) {
+      let s = text || "";
+      try {
+        if (typeof marked === "undefined" || typeof DOMPurify === "undefined") {
+          return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+        }
+        s = s.replace(/(^|\n)\s*[•◦▪]\s*/g, "$1- ");
+        s = s.replace(/ [•◦▪] /g, "\n- ");
+        const rawHtml = (typeof marked.parse === "function" ? marked.parse(s) : marked(s)) || s;
+        return DOMPurify.sanitize(rawHtml, { ALLOWED_TAGS: ["p", "br", "strong", "em", "u", "ul", "ol", "li", "h1", "h2", "h3", "code", "pre", "a"] });
+      } catch (err) {
+        return (s || "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+      }
+    }
+
     function appendMessage(role, content, isSafety) {
       chatPane.classList.remove("empty");
       const msgDiv = document.createElement("div");
@@ -200,7 +231,12 @@
       label.textContent = role === "user" ? "You" : "Assistant";
       msgDiv.appendChild(label);
       const text = document.createElement("div");
-      text.textContent = content;
+      text.className = "message-content";
+      if (role === "assistant") {
+        text.innerHTML = renderMarkdown(content);
+      } else {
+        text.textContent = content;
+      }
       msgDiv.appendChild(text);
       chatPane.appendChild(msgDiv);
       chatPane.scrollTop = chatPane.scrollHeight;

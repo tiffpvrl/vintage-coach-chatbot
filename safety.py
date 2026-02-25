@@ -44,6 +44,19 @@ DISTRESSED_PATTERNS = [
 ]
 
 # ---------------------------------------------------------------------------
+# Danger / harm-to-others or unsafe-situation patterns
+# ---------------------------------------------------------------------------
+
+DANGER_PATTERNS = [
+    # Intent to harm others
+    re.compile(r"\b(hurt|harm|kill)\s+(someone|him|her|them)\b", re.I),
+    # Being threatened or unsafe
+    re.compile(r"\b(threatening\s+me|threatening\s+us)\b", re.I),
+    re.compile(r"\b(don'?t|do\s+not|dont)\s+feel\s+safe\b", re.I),
+    re.compile(r"\b(in\s+danger|unsafe|not\s+safe)\b", re.I),
+]
+
+# ---------------------------------------------------------------------------
 # Medical emergency keywords (must be referred to doctor / hospital / 911)
 # ---------------------------------------------------------------------------
 
@@ -107,12 +120,26 @@ MEDICAL_EMERGENCY_PATTERNS = [
 # Fallback responses when backstop triggers
 # ---------------------------------------------------------------------------
 
-SAFETY_FALLBACK_RESPONSE = """I'm not able to help with that. If you or someone you know is in distress or crisis, please reach out to people who can help:
+SAFETY_FALLBACK_RESPONSE = """I'm really sorry you're feeling this way. I'm not able to help with self-harm, and I'm concerned about your safety.
+
+If you or someone you know is in distress or crisis, please reach out to people who can help and talk to someone right away:
 
 • **988 Suicide & Crisis Lifeline** (US): Call or text **988** — 24/7, free, confidential.
-• **Crisis Text Line**: Text **HOME** to 741741 — 24/7, free.
+• **Crisis Text Line**: Text **HOME** to 741741 — 24/7, free, confidential crisis support to talk to someone.
 
-You don't have to go through this alone."""
+If you are in immediate danger or this feels like an emergency, call **911** (US) or your local emergency number.
+
+You are not alone in this. Please reach out to someone you trust or a crisis counselor for support."""
+
+DANGER_FALLBACK_RESPONSE = """I'm really concerned about your safety and the safety of others. I'm not able to assist with anything that could cause harm.
+
+If you or someone else is in danger or facing an emergency, please reach out for help right away:
+
+• **In an emergency:** Call **911** (US) or your local emergency number so you can get immediate help and stay safe.
+• **988 Suicide & Crisis Lifeline** (US): Call or text **988** — 24/7, free, confidential crisis support.
+• **Crisis Text Line**: Text **HOME** to 741741 — 24/7, free, to talk to someone.
+
+You are not alone — please reach out to trusted friends, family, or professional support. They can help you stay safe and get support."""
 
 MEDICAL_EMERGENCY_FALLBACK_RESPONSE = """I can't give medical advice or diagnose emergencies. This sounds like something that needs immediate professional care.
 
@@ -129,7 +156,7 @@ class SafetyResult:
     response: str
     triggered: bool
     source: str | None = None  # "user" | "generation" | None
-    trigger_type: str | None = None  # "distress" | "medical_emergency" | None
+    trigger_type: str | None = None  # "distress" | "danger" | "medical_emergency" | None
 
 
 def _contains_distressed_content(text: str) -> bool:
@@ -141,6 +168,16 @@ def _contains_distressed_content(text: str) -> bool:
         if kw in lower:
             return True
     for pat in DISTRESSED_PATTERNS:
+        if pat.search(text):
+            return True
+    return False
+
+
+def _contains_danger_content(text: str) -> bool:
+    """Return True if text suggests someone else is in danger or being harmed."""
+    if not text or not text.strip():
+        return False
+    for pat in DANGER_PATTERNS:
         if pat.search(text):
             return True
     return False
@@ -166,6 +203,7 @@ def apply_safety_backstop(
     *,
     fallback: str | None = None,
     medical_fallback: str | None = None,
+    danger_fallback: str | None = None,
 ) -> SafetyResult:
     """Run a post-generation backstop: if user or model output suggests distress or medical emergency, return fallback.
 
@@ -187,12 +225,20 @@ def apply_safety_backstop(
     medical_fallback_out = (
         medical_fallback if medical_fallback is not None else MEDICAL_EMERGENCY_FALLBACK_RESPONSE
     )
+    danger_fallback_out = danger_fallback if danger_fallback is not None else DANGER_FALLBACK_RESPONSE
 
     # Check user message first (distress, then medical)
     if user_message:
         if _contains_distressed_content(user_message):
             return SafetyResult(
                 response=distress_fallback, triggered=True, source="user", trigger_type="distress"
+            )
+        if _contains_danger_content(user_message):
+            return SafetyResult(
+                response=danger_fallback_out,
+                triggered=True,
+                source="user",
+                trigger_type="danger",
             )
         if _contains_medical_emergency_content(user_message):
             return SafetyResult(
@@ -206,6 +252,13 @@ def apply_safety_backstop(
     if _contains_distressed_content(generated_text):
         return SafetyResult(
             response=distress_fallback, triggered=True, source="generation", trigger_type="distress"
+        )
+    if _contains_danger_content(generated_text):
+        return SafetyResult(
+            response=danger_fallback_out,
+            triggered=True,
+            source="generation",
+            trigger_type="danger",
         )
     if _contains_medical_emergency_content(generated_text):
         return SafetyResult(

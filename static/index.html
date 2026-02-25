@@ -101,22 +101,79 @@
       flex-direction: column;
       min-width: 0;
     }
-    textarea#message {
-      width: 100%;
-      min-height: 44px;
-      max-height: 200px;
-      padding: 0.6rem 0.75rem;
+    .query-box {
+      position: relative;
       border: 1px solid #d4c9b8;
       border-radius: 6px;
+      background: #fff;
+      min-height: 44px;
+    }
+    .query-box:focus-within {
+      border-color: #8b7355;
+      box-shadow: 0 0 0 2px rgba(139, 115, 85, 0.2);
+    }
+    .add-image-btn {
+      position: absolute;
+      left: 0.5rem;
+      top: 0.5rem;
+      width: 28px;
+      height: 28px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: transparent;
+      color: #6b5b4a;
+      border: 1px solid #d4c9b8;
+      border-radius: 6px;
+      font-size: 1.25rem;
+      line-height: 1;
+      cursor: pointer;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    .add-image-btn:hover {
+      background: #f0ebe3;
+      color: #5c4a32;
+      border-color: #8b7355;
+    }
+    #imageInput {
+      position: absolute;
+      width: 0;
+      height: 0;
+      opacity: 0;
+      pointer-events: none;
+    }
+    .query-box-inner {
+      display: flex;
+      flex-direction: column;
+      padding: 0.5rem 0.75rem 0.5rem 2.75rem;
+    }
+    .query-box-inner.has-images {
+      padding-top: 0.5rem;
+    }
+    .image-preview-inline {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .image-preview-inline:empty {
+      display: none;
+    }
+    textarea#message {
+      width: 100%;
+      min-height: 36px;
+      max-height: 200px;
+      padding: 0.25rem 0;
+      border: none;
       font: inherit;
       font-size: 0.95rem;
       resize: none;
       overflow-y: auto;
+      background: transparent;
     }
     textarea#message:focus {
       outline: none;
-      border-color: #8b7355;
-      box-shadow: 0 0 0 2px rgba(139, 115, 85, 0.2);
     }
     .form-row button {
       flex-shrink: 0;
@@ -149,19 +206,6 @@
       font-size: 0.8rem;
       color: #6b5b4a;
       margin-top: 0.25rem;
-    }
-    .image-upload {
-      margin-top: 0.5rem;
-    }
-    .image-upload input[type="file"] {
-      font-size: 0.85rem;
-      color: #6b5b4a;
-    }
-    .image-preview {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 0.5rem;
-      margin-top: 0.5rem;
     }
     .image-preview-item {
       position: relative;
@@ -197,8 +241,21 @@
       max-width: 120px;
       max-height: 120px;
       border-radius: 6px;
-      margin-top: 0.25rem;
       border: 1px solid #e0d6c8;
+      display: block;
+    }
+    .chat-pane .message.user .message-images {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .chat-pane .message.user .message-images:only-child {
+      margin-bottom: 0;
+    }
+    .chat-pane .message.user .message-text {
+      white-space: pre-wrap;
+      word-wrap: break-word;
     }
   </style>
 </head>
@@ -211,17 +268,19 @@
   <form id="form" action="#" method="post">
     <div class="form-row">
       <div class="query-wrap">
-        <textarea
-          name="message"
-          id="message"
-          placeholder="e.g. What does F5D-9966 mean on my Coach bag?"
-          rows="1"
-          autocomplete="off"
-          required
-        ></textarea>
-        <div class="image-upload">
+        <div class="query-box">
+          <button type="button" class="add-image-btn" id="addImageBtn" title="Add images" aria-label="Add images">+</button>
           <input type="file" id="imageInput" accept="image/jpeg,image/png,image/webp" multiple aria-label="Attach images">
-          <div id="imagePreview" class="image-preview"></div>
+          <div class="query-box-inner" id="queryBoxInner">
+            <div id="imagePreview" class="image-preview-inline"></div>
+            <textarea
+              name="message"
+              id="message"
+              placeholder="e.g. What does F5D-9966 mean on my Coach bag?"
+              rows="1"
+              autocomplete="off"
+            ></textarea>
+          </div>
         </div>
       </div>
       <button type="submit" id="submit">Ask</button>
@@ -238,6 +297,8 @@
     const form = document.getElementById("form");
     const messageInput = document.getElementById("message");
     const imageInput = document.getElementById("imageInput");
+    const addImageBtn = document.getElementById("addImageBtn");
+    const queryBoxInner = document.getElementById("queryBoxInner");
     const imagePreview = document.getElementById("imagePreview");
     const chatPane = document.getElementById("chatPane");
     const statusEl = document.getElementById("status");
@@ -257,8 +318,21 @@
       messageInput.style.height = Math.min(messageInput.scrollHeight, 200) + "px";
     }
 
+    function addImageFromFile(file) {
+      if (pendingImages.length >= MAX_IMAGES) return;
+      if (!file.type.startsWith("image/")) return;
+      if (file.size > MAX_IMAGE_SIZE) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        pendingImages.push({ dataUrl: e.target.result, file });
+        renderImagePreview();
+      };
+      reader.readAsDataURL(file);
+    }
+
     function renderImagePreview() {
       imagePreview.innerHTML = "";
+      queryBoxInner.classList.toggle("has-images", pendingImages.length > 0);
       for (let i = 0; i < pendingImages.length; i++) {
         const item = document.createElement("div");
         item.className = "image-preview-item";
@@ -270,8 +344,9 @@
         btn.className = "remove-img";
         btn.textContent = "×";
         btn.setAttribute("aria-label", "Remove image");
+        const idx = i;
         btn.addEventListener("click", () => {
-          pendingImages.splice(i, 1);
+          pendingImages.splice(idx, 1);
           renderImagePreview();
         });
         item.appendChild(img);
@@ -280,20 +355,25 @@
       }
     }
 
+    addImageBtn.addEventListener("click", () => imageInput.click());
+
     imageInput.addEventListener("change", () => {
       const files = Array.from(imageInput.files || []);
-      for (const file of files) {
-        if (pendingImages.length >= MAX_IMAGES) break;
-        if (!file.type.startsWith("image/")) continue;
-        if (file.size > MAX_IMAGE_SIZE) continue;
-        const reader = new FileReader();
-        reader.onload = (e) => {
-          pendingImages.push({ dataUrl: e.target.result, file });
-          renderImagePreview();
-        };
-        reader.readAsDataURL(file);
-      }
+      for (const file of files) addImageFromFile(file);
       imageInput.value = "";
+    });
+
+    messageInput.addEventListener("paste", (e) => {
+      const items = e.clipboardData?.items;
+      if (!items) return;
+      for (const item of items) {
+        if (item.type.startsWith("image/")) {
+          e.preventDefault();
+          const file = item.getAsFile();
+          if (file) addImageFromFile(file);
+          break;
+        }
+      }
     });
 
     messageInput.addEventListener("input", resizeTextarea);
@@ -328,23 +408,31 @@
       label.className = "message-label";
       label.textContent = role === "user" ? "You" : "Assistant";
       msgDiv.appendChild(label);
-      const text = document.createElement("div");
-      text.className = "message-content";
+      const contentWrap = document.createElement("div");
+      contentWrap.className = "message-content";
       if (role === "assistant") {
-        text.innerHTML = renderMarkdown(content);
+        contentWrap.innerHTML = renderMarkdown(content);
       } else {
-        text.textContent = content;
         if (imageUrls && imageUrls.length > 0) {
+          const imgWrap = document.createElement("div");
+          imgWrap.className = "message-images";
           for (const url of imageUrls) {
             const img = document.createElement("img");
             img.src = url;
             img.alt = "Attached";
             img.className = "msg-img";
-            text.appendChild(img);
+            imgWrap.appendChild(img);
           }
+          contentWrap.appendChild(imgWrap);
+        }
+        if (content) {
+          const textEl = document.createElement("div");
+          textEl.className = "message-text";
+          textEl.textContent = content;
+          contentWrap.appendChild(textEl);
         }
       }
-      msgDiv.appendChild(text);
+      msgDiv.appendChild(contentWrap);
       chatPane.appendChild(msgDiv);
       chatPane.scrollTop = chatPane.scrollHeight;
     }
@@ -357,9 +445,10 @@
     form.addEventListener("submit", async (e) => {
       e.preventDefault();
       const text = messageInput.value.trim();
-      if (!text) return;
-
       const imageDataUrls = pendingImages.map(p => p.dataUrl);
+      if (!text && imageDataUrls.length === 0) return;
+
+      const messageToSend = text || "What can you tell me about this?";
       pendingImages = [];
       renderImagePreview();
 
@@ -367,7 +456,7 @@
       if (chatPane.classList.contains("empty") || chatPane.textContent === EMPTY_TEXT) {
         chatPane.innerHTML = "";
       }
-      appendMessage("user", text, false, imageDataUrls);
+      appendMessage("user", messageToSend, false, imageDataUrls);
 
       const placeholder = document.createElement("div");
       placeholder.className = "message assistant";
@@ -382,7 +471,7 @@
       resizeTextarea();
 
       try {
-        const body = { message: text };
+        const body = { message: messageToSend };
         if (sessionId) body.session_id = sessionId;
         if (imageDataUrls.length > 0) body.images = imageDataUrls;
 

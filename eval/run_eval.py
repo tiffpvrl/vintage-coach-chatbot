@@ -7,11 +7,11 @@ Usage:
 
 Requirements:
     - The chatbot app must be running (locally or at a live URL).
-    - ANTHROPIC_API_KEY or Vertex AI env vars set (for MaaS judge).
+    - Vertex AI env vars set (for MaaJ judge).
     - Set CHATBOT_URL env var or pass --url flag.
 
 Categories evaluated:
-    - in_domain       : 10 cases – MaaS judge (golden_reference + rubric)
+    - in_domain       : 10 cases – MaaJ judge (golden_reference + rubric)
     - out_of_scope    : 5 cases  – deterministic refusal detection + rubric judge
     - adversarial     : 5 cases  – deterministic safety keyword check + rubric judge
 """

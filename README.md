@@ -1,7 +1,44 @@
 # Vintage Coach Bag Q&A Chatbot
 
-A narrow-domain chatbot that answers questions about **vintage Coach bags (pre-2000)**:
-serial numbers and style numbers, era context and hardware, quality and damage inspection, and condition-based care.
+A narrow-domain chatbot that answers questions about **vintage Coach bags (pre-2000)**. It helps owners and shoppers interpret serial numbers, identify eras and hardware, inspect for damage, and learn how to clean, condition, and care for their bags.
+
+## What you can ask
+
+The chatbot specializes in four areas. Here are example questions to get you started:
+
+### Serial & style numbers
+
+- *"What does F5D-9966 mean on my Coach bag?"*
+- *"My creed stamp says No. C7D-9085. What year was it made?"*
+- *"I found a bag with 4582-371 stamped inside. What format is that?"*
+- *"I can't find a serial number anywhere. Does that mean it's fake?"*
+
+### Era & hardware
+
+- *"How can I tell what era my bag is from? It has a turnlock and says Coach Leatherware inside."*
+- *"My bag says Made in United States but not New York City. When is it from?"*
+- *"What characteristics should I look for to authenticate a vintage Coach bag from the 1980s?"*
+- *"The Coach logo on my bag looks different from photos online. Should I be worried?"*
+
+### Care & cleaning
+
+- *"My bag has mildew and a musty smell from storage. What should I do?"*
+- *"The brass hardware is turning green. How do I clean it?"*
+- *"My British Tan bag feels stiff and the corners are scuffed. Is that fixable?"*
+- *"I have a dark stain and uneven color. How can I fix the discoloration?"*
+- *"What's the best way to store a vintage Coach bag?"*
+
+### Damage inspection & repair
+
+- *"The strap cracked near the hardware. Can I fix it myself?"*
+- *"How do I assess if damage is worth repairing?"*
+- *"What are the critical inspection points before buying a vintage Coach bag?"*
+
+### Attach images
+
+You can also **attach photos** (e.g. of the creed, serial number, or hardware) to your questions. Use the + button in the query box or paste an image with Ctrl+V.
+
+---
 
 ## Scope
 
@@ -12,42 +49,39 @@ serial numbers and style numbers, era context and hardware, quality and damage i
 
 Uses **LiteLLM** with **Vertex AI (Gemini)**. No API key needed — uses Application Default Credentials.
 
-| Config | Required |
-|--------|----------|
-| `GOOGLE_CLOUD_PROJECT` | Your GCP project ID |
-| `GOOGLE_CLOUD_LOCATION` | e.g. `us-central1` |
-| `VERTEX_AI_MODEL` | Optional; default `vertex_ai/gemini-2.0-flash-lite` |
+
+| Config                  | Required                                            |
+| ----------------------- | --------------------------------------------------- |
+| `GOOGLE_CLOUD_PROJECT`  | Your GCP project ID                                 |
+| `GOOGLE_CLOUD_LOCATION` | e.g. `us-central1`                                  |
+| `VERTEX_AI_MODEL`       | Optional; default `vertex_ai/gemini-2.0-flash-lite` |
+
 
 ## Run locally
 
 1. **Install [gcloud CLI](https://cloud.google.com/sdk/docs/install)** and authenticate:
-   ```bash
+  ```bash
    gcloud auth application-default login
-   ```
-
+  ```
 2. **Install the app** with [uv](https://docs.astral.sh/uv/):
-   ```bash
+  ```bash
    uv sync
-   ```
-
+  ```
 3. **Create a `.env` file** (copy from `.env.example`):
-   ```bash
-   cp .env.example .env
-   ```
-   Edit `.env` and set your GCP project ID and location:
-   ```
-   GOOGLE_CLOUD_PROJECT=your-gcp-project-id
-   GOOGLE_CLOUD_LOCATION=us-central1
-   ```
-
+  ```bash
+  cp .env.example .env
+  ```
+  Edit `.env` and set your GCP project ID and location:
+  ```
+  GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+  GOOGLE_CLOUD_LOCATION=us-central1
+  ```
 4. **Start the app**:
-   ```bash
+  ```bash
    uv run uvicorn main:app --reload
-   ```
-
-5. Open **http://127.0.0.1:8000** and ask a question. You can attach images (e.g. of a creed or serial number) to your questions.
-
-   > **Windows:** If you get `WinError 10013` (socket access forbidden), another program may be using port 8000. Either terminate that process (e.g. `netstat -ano | findstr :8000` to find the PID, then `taskkill /PID <pid> /F`) or use a different port: `uv run uvicorn main:app --reload --port 8080`.
+  ```
+5. Open **[http://127.0.0.1:8000](http://127.0.0.1:8000)** and ask a question. You can attach images (e.g. of a creed or serial number) to your questions.
+  > **Windows:** If you get `WinError 10013` (socket access forbidden), another program may be using port 8000. Either terminate that process (e.g. `netstat -ano | findstr :8000` to find the PID, then `taskkill /PID <pid> /F`) or use a different port: `uv run uvicorn main:app --reload --port 8080`.
 
 ## Run evaluation
 
@@ -57,11 +91,11 @@ From the project root:
 uv run python eval/run_eval.py
 ```
 
-(See `eval/README.md` or the eval script for options. Requires Vertex AI env vars.)
+This tests the deployed chatbot. See `eval/README_eval.md` for full details. Requires Vertex AI env vars for the MaaS judge.
 
 ## Live URL
 
-**Live app:** [Add your GCP deployment URL here after deploying.]
+**Live app:** [https://vintage-coach-chatbot-718451494976.us-central1.run.app](https://vintage-coach-chatbot-718451494976.us-central1.run.app) 
 
 ## Repo layout
 
@@ -78,22 +112,17 @@ uv run python eval/run_eval.py
 ## Deployment (GCP) with Vertex AI
 
 1. **Enable APIs** in your project:
-   - Vertex AI API
-   - Cloud Run (if using Cloud Run)
-
+  - Vertex AI API
+  - Cloud Run (if using Cloud Run)
 2. **Grant the Cloud Run service account** access to Vertex AI:
-   - IAM: add role **Vertex AI User** (or **roles/aiplatform.user**) to the service account that runs the Cloud Run service (default: `PROJECT_NUMBER-compute@developer.gserviceaccount.com`).
-
+  - IAM: add role **Vertex AI User** (or **roles/aiplatform.user**) to the service account that runs the Cloud Run service (default: `PROJECT_NUMBER-compute@developer.gserviceaccount.com`).
 3. **Deploy** (no API key needed when using Vertex AI):
-   ```bash
+  ```bash
    gcloud run deploy vintage-coach-chatbot --source . --region us-central1 --allow-unauthenticated \
      --set-env-vars "GOOGLE_CLOUD_PROJECT=YOUR_PROJECT_ID,GOOGLE_CLOUD_LOCATION=us-central1"
-   ```
+  ```
    Replace `YOUR_PROJECT_ID` with your GCP project ID. The running container uses Application Default Credentials, so the service account above is used for Vertex AI calls.
-
 4. Optional: set `VERTEX_AI_MODEL` (e.g. `vertex_ai/gemini-1.5-pro`) if you want a different model than `vertex_ai/gemini-2.0-flash-lite`.
-
-5. Put the live URL in this README and in your submission.
 
 ---
 
@@ -132,13 +161,15 @@ The system follows a layered design:
 
 ### Component breakdown
 
-| Component | Purpose |
-|-----------|---------|
-| **main.py** | FastAPI app; routes (`/`, `/chat`, `/clear`, `/health`); session storage; request/response models; image validation and multimodal message construction. |
-| **chatbot.py** | Builds initial messages (system + few-shot), calls LiteLLM `completion()`, passes to safety backstop. Handles multimodal content extraction for safety context. |
-| **prompt.py** | System prompt assembly: role persona, hard-coded rules (serial numbers, era, hardware, damage, care), in-scope/out-of-scope instructions, escape hatch, and 6 few-shot examples. |
-| **safety.py** | Post-generation backstop: keyword + regex checks for distress/crisis and medical-emergency content; returns fallback responses when triggered. |
-| **static/index.html** | Chat UI: query box with + button, image paste, inline preview; chat pane with images-first layout; Markdown rendering (marked + DOMPurify). |
+
+| Component             | Purpose                                                                                                                                                                          |
+| --------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **main.py**           | FastAPI app; routes (`/`, `/chat`, `/clear`, `/health`); session storage; request/response models; image validation and multimodal message construction.                         |
+| **chatbot.py**        | Builds initial messages (system + few-shot), calls LiteLLM `completion()`, passes to safety backstop. Handles multimodal content extraction for safety context.                  |
+| **prompt.py**         | System prompt assembly: role persona, hard-coded rules (serial numbers, era, hardware, damage, care), in-scope/out-of-scope instructions, escape hatch, and 6 few-shot examples. |
+| **safety.py**         | Post-generation backstop: keyword + regex checks for distress/crisis and medical-emergency content; returns fallback responses when triggered.                                   |
+| **static/index.html** | Chat UI: query box with + button, image paste, inline preview; chat pane with images-first layout; Markdown rendering (marked + DOMPurify).                                      |
+
 
 ### Message format & session management
 
@@ -195,3 +226,4 @@ Prompt structure in `prompt.py`:
 - **Dockerfile:** Python 3.12 slim; uv for package install; copies source; exposes 8080; runs `uvicorn main:app`.
 - **Cloud Run:** Stateless; no session persistence across instances. Health check at `/health`.
 - **Credential flow:** Application Default Credentials; Cloud Run service account needs `roles/aiplatform.user` for Vertex AI.
+
